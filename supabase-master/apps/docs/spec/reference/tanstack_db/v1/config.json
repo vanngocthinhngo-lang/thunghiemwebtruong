@@ -1,9 +1,0 @@
-{
-  "partialsOrder": [
-    "introduction",
-    "installing",
-    "supabase-collection-options",
-    "query-once",
-    "use-live-query"
-  ]
-}
