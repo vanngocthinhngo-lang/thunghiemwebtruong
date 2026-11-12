@@ -1,0 +1,41 @@
+import { useQuery } from '@tanstack/react-query'
+
+import { projectKeys } from './keys'
+import { get, handleError, unguarded } from '@/data/fetchers'
+import type { StudioError } from '@/lib/errors/studio-errors'
+import type { UseCustomQueryOptions } from '@/types'
+
+export type GenerateTypesVariables = { ref?: string; included_schemas?: string }
+
+export async function generateTypes(
+  { ref, included_schemas }: GenerateTypesVariables,
+  signal?: AbortSignal
+) {
+  if (!ref) throw new Error('Project ref is required')
+
+  const { data, error } = await get(`/v1/projects/{ref}/types/typescript`, {
+    params: { path: { ref }, query: { included_schemas } },
+    signal,
+    grant: unguarded.migrating,
+  })
+
+  if (error) handleError(error)
+  return data
+}
+
+export type GenerateTypesData = Awaited<ReturnType<typeof generateTypes>>
+export type GenerateTypesError = StudioError
+
+export const useGenerateTypesQuery = <TData = GenerateTypesData>(
+  { ref, included_schemas }: GenerateTypesVariables,
+  {
+    enabled = true,
+    ...options
+  }: UseCustomQueryOptions<GenerateTypesData, GenerateTypesError, TData> = {}
+) =>
+  useQuery<GenerateTypesData, GenerateTypesError, TData>({
+    queryKey: projectKeys.types(ref),
+    queryFn: ({ signal }) => generateTypes({ ref, included_schemas }, signal),
+    enabled: enabled && typeof ref !== 'undefined',
+    ...options,
+  })

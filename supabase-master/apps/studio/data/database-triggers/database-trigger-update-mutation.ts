@@ -1,0 +1,73 @@
+import pgMeta from '@supabase/pg-meta'
+import { PGTriggerUpdate } from '@supabase/pg-meta/src/pg-meta-triggers'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+
+import { databaseTriggerKeys } from './keys'
+import { unguarded } from '@/data/fetchers'
+import { executeSql } from '@/data/sql/execute-sql-mutation'
+import type { StudioError } from '@/lib/errors/studio-errors'
+import type { UseCustomMutationOptions } from '@/types'
+
+export type DatabaseTriggerUpdateVariables = {
+  originalTrigger: {
+    id: number
+    name: string
+    schema: string
+    table: string
+  }
+  projectRef: string
+  connectionString?: string | null
+  payload: PGTriggerUpdate
+}
+
+export async function updateDatabaseTrigger({
+  originalTrigger,
+  projectRef,
+  connectionString,
+  payload,
+}: DatabaseTriggerUpdateVariables) {
+  const { sql } = pgMeta.triggers.update(originalTrigger, payload)
+
+  const { result } = await executeSql({
+    projectRef,
+    connectionString,
+    sqlOrigin: 'studio',
+    queryName: 'trigger-update',
+    sql,
+    queryKey: ['trigger', 'update', originalTrigger.id],
+    grant: unguarded.migrating,
+  })
+
+  return result
+}
+
+type DatabaseTriggerUpdateData = Awaited<ReturnType<typeof updateDatabaseTrigger>>
+
+export const useDatabaseTriggerUpdateMutation = ({
+  onSuccess,
+  onError,
+  ...options
+}: Omit<
+  UseCustomMutationOptions<DatabaseTriggerUpdateData, StudioError, DatabaseTriggerUpdateVariables>,
+  'mutationFn'
+> = {}) => {
+  const queryClient = useQueryClient()
+
+  return useMutation<DatabaseTriggerUpdateData, StudioError, DatabaseTriggerUpdateVariables>({
+    mutationFn: (vars) => updateDatabaseTrigger(vars),
+    async onSuccess(data, variables, context) {
+      const { projectRef } = variables
+      await queryClient.invalidateQueries({ queryKey: databaseTriggerKeys.list(projectRef) })
+      await onSuccess?.(data, variables, context)
+    },
+    async onError(data, variables, context) {
+      if (onError === undefined) {
+        toast.error(`Failed to update database trigger: ${data.message}`)
+      } else {
+        onError(data, variables, context)
+      }
+    },
+    ...options,
+  })
+}

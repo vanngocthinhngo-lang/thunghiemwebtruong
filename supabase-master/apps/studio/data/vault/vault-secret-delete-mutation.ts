@@ -1,0 +1,62 @@
+import { Query } from '@supabase/pg-meta/src/query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+
+import { vaultSecretsKeys } from './keys'
+import { unguarded } from '@/data/fetchers'
+import { executeSql } from '@/data/sql/execute-sql-mutation'
+import type { StudioError } from '@/lib/errors/studio-errors'
+import type { UseCustomMutationOptions } from '@/types'
+
+export type VaultSecretDeleteVariables = {
+  projectRef: string
+  connectionString?: string | null
+  id: string
+}
+
+export async function deleteVaultSecret({
+  projectRef,
+  connectionString,
+  id,
+}: VaultSecretDeleteVariables) {
+  const sql = new Query().from('secrets', 'vault').delete().match({ id }).toSql()
+  const { result } = await executeSql({
+    projectRef,
+    connectionString,
+    sqlOrigin: 'studio',
+    queryName: 'vault-secret-delete',
+    sql,
+    grant: unguarded.migrating,
+  })
+  return result
+}
+
+type VaultSecretDeleteData = Awaited<ReturnType<typeof deleteVaultSecret>>
+
+export const useVaultSecretDeleteMutation = ({
+  onError,
+  onSuccess,
+  ...options
+}: Omit<
+  UseCustomMutationOptions<VaultSecretDeleteData, StudioError, VaultSecretDeleteVariables>,
+  'mutationFn'
+> = {}) => {
+  const queryClient = useQueryClient()
+
+  return useMutation<VaultSecretDeleteData, StudioError, VaultSecretDeleteVariables>({
+    mutationFn: (vars) => deleteVaultSecret(vars),
+    async onSuccess(data, variables, context) {
+      const { projectRef } = variables
+      await queryClient.invalidateQueries({ queryKey: vaultSecretsKeys.list(projectRef) })
+      await onSuccess?.(data, variables, context)
+    },
+    async onError(data, variables, context) {
+      if (onError === undefined) {
+        toast.error(`Failed to delete key: ${data.message}`)
+      } else {
+        onError(data, variables, context)
+      }
+    },
+    ...options,
+  })
+}

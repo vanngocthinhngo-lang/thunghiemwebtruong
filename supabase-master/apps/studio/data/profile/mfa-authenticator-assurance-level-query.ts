@@ -1,0 +1,51 @@
+import type { AuthMFAGetAuthenticatorAssuranceLevelResponse } from '@supabase/supabase-js'
+import { useQuery, type QueryKey } from '@tanstack/react-query'
+import { useUser } from 'common'
+
+import { profileKeys } from './keys'
+import type { Profile } from './types'
+import { auth } from '@/lib/gotrue'
+import { UseCustomQueryOptions } from '@/types'
+
+export type ProfileResponse = Profile
+
+export async function getMfaAuthenticatorAssuranceLevel() {
+  const { error, data } = await auth.mfa.getAuthenticatorAssuranceLevel()
+
+  if (error) throw error
+  return data
+}
+
+type CustomAuthMFAGetAuthenticatorAssuranceLevelData = NonNullable<
+  AuthMFAGetAuthenticatorAssuranceLevelResponse['data']
+>
+type CustomAuthMFAGetAuthenticatorAssuranceLevelError = NonNullable<
+  AuthMFAGetAuthenticatorAssuranceLevelResponse['error']
+>
+
+export const useAuthenticatorAssuranceLevelQuery = <
+  TData = CustomAuthMFAGetAuthenticatorAssuranceLevelData,
+>({
+  enabled = true,
+  queryKey,
+  ...options
+}: UseCustomQueryOptions<
+  CustomAuthMFAGetAuthenticatorAssuranceLevelData,
+  CustomAuthMFAGetAuthenticatorAssuranceLevelError,
+  TData
+> & {
+  queryKey?: QueryKey
+} = {}) => {
+  const userId = useUser()?.id
+  return useQuery<
+    CustomAuthMFAGetAuthenticatorAssuranceLevelData,
+    CustomAuthMFAGetAuthenticatorAssuranceLevelError,
+    TData
+  >({
+    queryKey: queryKey ?? profileKeys.aaLevel(userId),
+    enabled,
+    queryFn: () => getMfaAuthenticatorAssuranceLevel(),
+    staleTime: 1000 * 60 * 30,
+    ...options,
+  })
+}

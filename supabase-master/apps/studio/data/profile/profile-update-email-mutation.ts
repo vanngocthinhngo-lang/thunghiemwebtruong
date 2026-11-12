@@ -1,0 +1,54 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+
+import { profileKeys } from './keys'
+import { handleError, put } from '@/data/fetchers'
+import type { StudioError } from '@/lib/errors/studio-errors'
+import { auth } from '@/lib/gotrue'
+import type { UseCustomMutationOptions } from '@/types'
+
+export type EmailUpdateVariables = {
+  email: string
+  hcaptchaToken: string | null
+}
+
+export async function updateEmail({ email, hcaptchaToken }: EmailUpdateVariables) {
+  const { data, error } = await put('/platform/update-email', {
+    body: { newEmail: email, hcaptchaToken },
+  })
+
+  if (error) handleError(error)
+  return data
+}
+
+type EmailUpdateData = Awaited<ReturnType<typeof updateEmail>>
+
+export const useEmailUpdateMutation = ({
+  onSuccess,
+  onError,
+  ...options
+}: Omit<
+  UseCustomMutationOptions<EmailUpdateData, StudioError, EmailUpdateVariables>,
+  'mutationFn'
+> = {}) => {
+  const queryClient = useQueryClient()
+
+  return useMutation<EmailUpdateData, StudioError, EmailUpdateVariables>({
+    mutationFn: (vars) => updateEmail(vars),
+    async onSuccess(data, variables, context) {
+      await Promise.all([
+        auth.refreshSession(),
+        queryClient.invalidateQueries({ queryKey: profileKeys.profile() }),
+      ])
+      await onSuccess?.(data, variables, context)
+    },
+    async onError(data, variables, context) {
+      if (onError === undefined) {
+        toast.error(`Failed to update email: ${data.message}`)
+      } else {
+        onError(data, variables, context)
+      }
+    },
+    ...options,
+  })
+}

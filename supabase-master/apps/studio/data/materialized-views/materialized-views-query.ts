@@ -1,0 +1,59 @@
+import pgMeta, { type PGMaterializedView } from '@supabase/pg-meta'
+import { useQuery } from '@tanstack/react-query'
+
+import { executeSql } from '../sql/execute-sql-mutation'
+import { materializedViewKeys } from './keys'
+import { unguarded } from '@/data/fetchers'
+import type { StudioError } from '@/lib/errors/studio-errors'
+import type { UseCustomQueryOptions } from '@/types'
+
+export type MaterializedViewsVariables = {
+  projectRef?: string
+  connectionString?: string | null
+  schemas?: string[]
+}
+
+export async function getMaterializedViews(
+  { projectRef, connectionString, schemas }: MaterializedViewsVariables,
+  signal?: AbortSignal
+) {
+  if (!projectRef) throw new Error('projectRef is required')
+
+  const { sql } = pgMeta.materializedViews.list({ includedSchemas: schemas })
+
+  const { result } = await executeSql(
+    {
+      projectRef,
+      connectionString,
+      sqlOrigin: 'studio',
+      queryName: 'materialized-views',
+      sql,
+      queryKey: ['materialized-views', schemas].filter(Boolean),
+      grant: unguarded.migrating,
+    },
+    signal
+  )
+
+  return result as PGMaterializedView[]
+}
+
+export type MaterializedViewsData = Awaited<ReturnType<typeof getMaterializedViews>>
+export type MaterializedViewsError = StudioError
+
+export const useMaterializedViewsQuery = <TData = MaterializedViewsData>(
+  { projectRef, connectionString, schemas }: MaterializedViewsVariables,
+  {
+    enabled = true,
+    ...options
+  }: UseCustomQueryOptions<MaterializedViewsData, MaterializedViewsError, TData> = {}
+) =>
+  useQuery<MaterializedViewsData, MaterializedViewsError, TData>({
+    queryKey: schemas
+      ? materializedViewKeys.listBySchema(projectRef, schemas)
+      : materializedViewKeys.list(projectRef),
+    queryFn: ({ signal }) =>
+      getMaterializedViews({ projectRef, connectionString, schemas }, signal),
+    enabled: enabled && typeof projectRef !== 'undefined',
+    staleTime: 0,
+    ...options,
+  })

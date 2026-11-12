@@ -1,0 +1,4 @@
+{
+  "buildCommand": "pnpm build",
+  "bulkRedirectsPath": "./lib/redirects/generated/static-redirects-md-variants.json"
+}

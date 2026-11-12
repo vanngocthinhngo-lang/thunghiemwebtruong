@@ -1,0 +1,72 @@
+import pgMeta from '@supabase/pg-meta'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+
+import { databasePoliciesKeys } from './keys'
+import { unguarded } from '@/data/fetchers'
+import { executeSql } from '@/data/sql/execute-sql-mutation'
+import type { StudioError } from '@/lib/errors/studio-errors'
+import type { UseCustomMutationOptions } from '@/types'
+
+export type DatabasePolicyDeleteVariables = {
+  projectRef: string
+  connectionString?: string | null
+  originalPolicy: {
+    id: number
+    name: string
+    schema: string
+    table: string
+  }
+}
+
+export async function deleteDatabasePolicy({
+  projectRef,
+  connectionString,
+  originalPolicy,
+}: DatabasePolicyDeleteVariables) {
+  let headers = new Headers()
+  if (connectionString) headers.set('x-connection-encrypted', connectionString)
+
+  const { sql } = pgMeta.policies.remove(originalPolicy)
+  const { result } = await executeSql({
+    projectRef,
+    connectionString,
+    sqlOrigin: 'studio',
+    queryName: 'policy-delete',
+    sql,
+    queryKey: ['policy', 'delete', originalPolicy.id],
+    grant: unguarded.migrating,
+  })
+
+  return result
+}
+
+type DatabasePolicyDeleteData = Awaited<ReturnType<typeof deleteDatabasePolicy>>
+
+export const useDatabasePolicyDeleteMutation = ({
+  onSuccess,
+  onError,
+  ...options
+}: Omit<
+  UseCustomMutationOptions<DatabasePolicyDeleteData, StudioError, DatabasePolicyDeleteVariables>,
+  'mutationFn'
+> = {}) => {
+  const queryClient = useQueryClient()
+
+  return useMutation<DatabasePolicyDeleteData, StudioError, DatabasePolicyDeleteVariables>({
+    mutationFn: (vars) => deleteDatabasePolicy(vars),
+    async onSuccess(data, variables, context) {
+      const { projectRef } = variables
+      await queryClient.invalidateQueries({ queryKey: databasePoliciesKeys.list(projectRef) })
+      await onSuccess?.(data, variables, context)
+    },
+    async onError(data, variables, context) {
+      if (onError === undefined) {
+        toast.error(`Failed to delete database policy: ${data.message}`)
+      } else {
+        onError(data, variables, context)
+      }
+    },
+    ...options,
+  })
+}

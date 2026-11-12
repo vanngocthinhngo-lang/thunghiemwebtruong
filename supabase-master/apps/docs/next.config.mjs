@@ -1,0 +1,189 @@
+// @ts-check
+import configureBundleAnalyzer from '@next/bundle-analyzer'
+import nextMdx from '@next/mdx'
+import { withSentryConfig } from '@sentry/nextjs'
+import withYaml from 'next-plugin-yaml'
+import rehypeSlug from 'rehype-slug'
+import remarkGfm from 'remark-gfm'
+import { parse as parseToml } from 'smol-toml'
+
+import { dynamicRedirects } from './lib/redirects/dynamic-redirects.js'
+import remotePatterns from './lib/remotePatterns.js'
+
+const withBundleAnalyzer = configureBundleAnalyzer({
+  enabled: process.env.ANALYZE === 'true',
+})
+
+const withMDX = nextMdx({
+  extension: /\.mdx?$/,
+  options: {
+    remarkPlugins: [remarkGfm],
+    rehypePlugins: [rehypeSlug],
+    providerImportSource: '@mdx-js/react',
+  },
+})
+
+/** @type {import('next').NextConfig} nextConfig */
+const nextConfig = {
+  // Append the default value with md extensions
+  pageExtensions: ['ts', 'tsx', 'js', 'jsx', 'md', 'mdx'],
+  // reactStrictMode: true,
+  // swcMinify: true,
+  basePath: process.env.NEXT_PUBLIC_BASE_PATH || '/docs',
+  images: {
+    dangerouslyAllowSVG: false,
+    // Some guides add `?v=N` to local image paths for cache busting, which Next.js rejects unless
+    // `localPatterns` allows it. Omitting `search` allows any query string.
+    localPatterns: [{ pathname: '/**' }],
+    // @ts-ignore
+    remotePatterns,
+  },
+  webpack: (config) => {
+    config.module.rules.push({
+      test: /\.include$/,
+      type: 'asset/source',
+    })
+    config.module.rules.push({
+      test: /\.toml$/,
+      type: 'json',
+      parser: {
+        parse: parseToml,
+      },
+    })
+    return config
+  },
+  transpilePackages: [
+    'ui',
+    'ui-patterns',
+    'common',
+    'docs-search',
+    'dayjs',
+    'shared-data',
+    'api-types',
+    'icons',
+    'next-mdx-remote',
+  ],
+  outputFileTracingIncludes: {
+    '/api/crawlers': ['./features/docs/generated/**/*', './docs/ref/**/*'],
+    '/api/guides-md/**/*': ['./public/markdown/guides/**/*'],
+    '/guides/**/*': ['./content/guides/**/*', './examples/**/*'],
+    '/reference/**/*': ['./features/docs/generated/**/*', './docs/ref/**/*'],
+  },
+  serverExternalPackages: ['libpg-query', 'twoslash'],
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Strict-Transport-Security',
+            value: process.env.VERCEL === '1' ? 'max-age=31536000; includeSubDomains; preload' : '',
+          },
+          {
+            key: 'X-Robots-Tag',
+            value: 'all',
+          },
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+        ],
+        has: [
+          {
+            type: 'host',
+            value: 'supabase.com',
+          },
+        ],
+      },
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Strict-Transport-Security',
+            value: process.env.VERCEL === '1' ? 'max-age=31536000; includeSubDomains; preload' : '',
+          },
+          {
+            key: 'X-Robots-Tag',
+            value: 'noindex',
+          },
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+        ],
+        has: [
+          {
+            type: 'host',
+            value: '(?:.+\\.vercel\\.app)',
+          },
+        ],
+      },
+      {
+        source: '/favicon/:slug*',
+        headers: [{ key: 'cache-control', value: 'public, max-age=86400' }],
+      },
+    ]
+  },
+
+  /**
+   * Redirects for /docs paths live in ./lib/redirects (see its README.md).
+   * Static one-to-one rules are served by Vercel bulk redirects via vercel.json.
+   * Dynamic rules, including the dev/preview redirects, come from dynamic-redirects.js.
+   */
+  async redirects() {
+    // For /docs/guides/ dynamic redirects, auto-generate .md variants so renamed/deleted pages
+    // redirect correctly when fetched as markdown
+    const docsMdRedirects = dynamicRedirects
+      .filter(
+        (r) =>
+          r.source.startsWith('/docs/guides/') &&
+          typeof r.destination === 'string' &&
+          r.destination.startsWith('/')
+      )
+      .map((r) => ({ ...r, source: `${r.source}.md`, destination: `${r.destination}.md` }))
+
+    return [...docsMdRedirects, ...dynamicRedirects]
+  },
+  typescript: {
+    // On previews, typechecking is run via GitHub Action only for efficiency
+    // On production, we turn it on to prevent errors from conflicting PRs getting into
+    // prod
+    ignoreBuildErrors: process.env.NEXT_PUBLIC_VERCEL_ENV === 'production' ? false : true,
+  },
+}
+
+const configExport = () => {
+  const plugins = [withMDX, withYaml, withBundleAnalyzer]
+  // @ts-ignore
+  return plugins.reduce((acc, next) => next(acc), nextConfig)
+}
+
+export default withSentryConfig(configExport, {
+  // For all available options, see:
+  // https://www.npmjs.com/package/@sentry/webpack-plugin#options
+
+  org: 'supabase',
+  project: 'docs',
+  applicationKey: 'supabase-docs',
+  webpack: {
+    treeshake: {
+      // Automatically tree-shake Sentry logger statements to reduce bundle size
+      removeDebugLogging: true,
+    },
+  },
+
+  // Only print logs for uploading source maps in CI
+  silent: !process.env.CI,
+
+  // For all available options, see:
+  // https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/
+
+  // Upload a larger set of source maps for prettier stack traces (increases build time)
+  widenClientFileUpload: true,
+
+  // Uncomment to route browser requests to Sentry through a Next.js rewrite to circumvent ad-blockers.
+  // This can increase your server load as well as your hosting bill.
+  // Note: Check that the configured route will not match with your Next.js middleware, otherwise reporting of client-
+  // side errors will fail.
+  // tunnelRoute: "/monitoring",
+})

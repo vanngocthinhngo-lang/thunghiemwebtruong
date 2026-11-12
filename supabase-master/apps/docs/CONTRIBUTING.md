@@ -1,0 +1,205 @@
+# Contributing to Supabase docs
+
+Our docs help developers to get started and keep succeeding with Supabase. We welcome contributions from everyone.
+
+If you'd like to contribute, pick a [recommended issue](https://github.com/supabase/supabase/issues?q=is%3Aopen+is%3Aissue+label%3Adocumentation+label%3A%22help+wanted%22) or [open an issue](https://github.com/supabase/supabase/issues/new/choose) with your question or idea first. Link the issue in your pull request. GitHub automatically requests a review from the Docs team (`@supabase/docs`).
+
+How to write a docs page is covered by the [style guide](./style-guide/README.md). If you write with an agent, use our [AI agent skills for docs authoring](#ai-agent-skills-for-docs-authoring), including the skills that help you frame a page and place it in the information architecture. Be sure to give your changes human review.
+
+## Style guide
+
+The [style guide](./style-guide/README.md) covers how to write a docs page: voice,
+page structure, which components to use, and terminology. Start at its
+[README](./style-guide/README.md) for what the guide covers and how the files are ordered.
+
+| File                                                                     | Covers                                             |
+| ------------------------------------------------------------------------ | -------------------------------------------------- |
+| [`style-guide/WORD_LIST.md`](./style-guide/WORD_LIST.md)                 | Terminology, spelling, capitalization              |
+| [`style-guide/01-voice-and-tone.md`](./style-guide/01-voice-and-tone.md) | Person, tense, sentence length, brevity            |
+| [`style-guide/02-elements.md`](./style-guide/02-elements.md)             | Admonitions, code blocks, procedures, tabs, images |
+| [`style-guide/03-page-structure.md`](./style-guide/03-page-structure.md) | Document type, section grouping, chunking          |
+
+The rest of this file covers repo mechanics: where content lives, how to add a page,
+and how the reference docs are generated.
+
+## AI agent skills for docs authoring
+
+Use these skills for every docs change you make with an AI coding agent: `/write-the-docs` to draft, and `/edit-the-docs` to revise an existing page. They apply the [style guide](./style-guide/README.md), so you don't have to hold it in your head.
+
+Skills work in any agent that reads `.agents/skills/`, such as Claude Code, Cursor, or Codex. Invoke a skill with `/name`, for example `/write-the-docs`. The canonical files live in `.agents/skills/` (`.claude/skills` is a symlink).
+
+### Write the docs skills
+
+Use the [Write the docs](../../.agents/skills/pm-the-docs/reference/write-the-docs-checklist.md) checklist when product intent and code drive the change: net-new pages, or revising/restructuring existing ones.
+
+| Skill                                                              | Checklist stage         | Use for                                                                                                          |
+| ------------------------------------------------------------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| [`pm-the-docs`](../../.agents/skills/pm-the-docs/SKILL.md)         | Frame / shape           | Audience, stage, why, content type, cross-repo scope (universe when you have Supabase org access, else OSS path) |
+| [`ask-the-docs`](../../.agents/skills/ask-the-docs/SKILL.md)       | Frame / shape           | Docs-app architecture, IA placement, where content lives                                                         |
+| [`write-the-docs`](../../.agents/skills/write-the-docs/SKILL.md)   | Draft                   | Draft or revise content grounded in intent and code                                                              |
+| [`test-the-docs`](../../.agents/skills/test-the-docs/SKILL.md)     | Draft / self-review     | Run snippets in a Docker-isolated stack; verification report                                                     |
+| [`review-the-docs`](../../.agents/skills/review-the-docs/SKILL.md) | Self-review / PR review | Checking a draft; verify a PR                                                                                    |
+
+### Edit existing pages
+
+Use [`edit-the-docs`](../../.agents/skills/edit-the-docs/SKILL.md) for style, structure, or brevity on an existing page when you are not changing the product story.
+
+## Repo organization
+
+Most docs pages are contained in the `apps/docs/content` directory. Some docs sections are federated from other repositories, for example [`pg_graphql`](https://github.com/supabase/pg_graphql/tree/master/docs). Reference docs are generated from spec files in the `spec` directory.
+
+You can usually identify a federated or reference doc because it uses a Next.js dynamic route. For example, it might use `[[...slug]].tsx`. Look for the spec file import or the repo definition to find the content location.
+
+Example spec file import:
+
+```js
+import specFile from '~/spec/transforms/analytics_v0_openapi_deparsed.json' with { type: 'json' }
+```
+
+Example repo definition:
+
+```js
+const org = 'supabase'
+const repo = 'pg_graphql'
+const branch = 'master'
+const docsDir = 'docs'
+const externalSite = 'https://supabase.github.io/pg_graphql'
+```
+
+Check the sections for [guide structure](#guide-structure) and [reference structure](#reference-structure) to learn more about the file structures.
+
+## Guide structure
+
+The Supabase docs use [MDX](https://mdxjs.com/). Guides are MDX documents that combine concise prose with structured procedures.
+
+Adding a new guide requires:
+
+- YAML frontmatter
+- A navigation entry in a separate file
+
+Frontmatter looks like this. `title` and `description` are required. Optional properties control the page display, including `subtitle`, `tocVideo`, and `hideToc`. For what goes in `description` and `subtitle`, see [Write good frontmatter](./style-guide/03-page-structure.md#write-good-frontmatter).
+
+```yaml
+---
+title: How to connect to Supabase
+description: Connect to your Supabase Postgres database from a frontend app, a backend server, or a database tool, using a direct connection or the connection pooler.
+hideToc: true
+---
+```
+
+The navigation is defined in [`NavigationMenu.constants.ts`](https://github.com/supabase/supabase/blob/master/apps/docs/components/Navigation/NavigationMenu/NavigationMenu.constants.ts).
+
+Add an entry with the `name`, `url`, and optional `icon` for your page.
+
+### Skip anchor link CI check
+
+When you remove a header that is linked to elsewhere, CI fails.
+You may want to merge your change anyway. For example, you may want to correct the links in a separate PR to avoid PR bloat.
+
+To merge anyway:
+
+1. Confirm the removal is deliberate.
+2. Add the `skip-anchor-check` label to the PR.
+3. Wait for the check to rerun. It passes and lists the broken links as warnings.
+
+## Reference structure
+
+Reference docs are produced from the reference specs and library source code. A common spec file contains shared function and endpoint definitions, and library-specific spec files contain further details.
+
+### Common spec file
+
+Each type of library, such as a language SDK or CLI, has a common spec file. For example, see the [spec file for the language SDKs](https://github.com/supabase/supabase/blob/master/apps/docs/spec/common-client-libs-sections.json). This file contains definitions for the common SDK functions:
+
+- `id`: Identifies the function
+- `title`: Provides the human-readable title
+- `slug`: Provides the URL slug
+- `product`: Identifies the Supabase product that owns the function. For example, database operations are owned by `database`, and Auth operations are owned by `auth`.
+- `type`: Uses `function` for a structured function definition or `markdown` for a prose explainer section
+
+To add a new function, manually add an entry to this common file.
+
+### Specific spec file
+
+Each library also has its own spec file containing library-specific details. For example, see the [JavaScript SDK spec file](https://github.com/supabase/supabase/blob/master/apps/docs/spec/supabase_js_v2.yml).
+
+The functions listed in this file match the ones defined in the common spec file.
+
+Each function contains a description, code examples, and optional notes. The parameters are pulled from the source code via the `$ref` property, which references a function definition in the source code repo. These references are pulled down and transformed using commands in the spec [Makefile](https://github.com/supabase/supabase/blob/master/apps/docs/spec/Makefile). Unless you're a library maintainer, you don't need to worry about this.
+
+If you're a library maintainer, follow these steps when updating function parameters or return values:
+
+1. Merge your changes into the library's `master` branch.
+2. Wait for the action to update the specification in the `gh-pages` branch.
+3. Run `make` from `apps/docs/spec` in the `supabase/supabase` repository.
+4. Verify the changes on your local documentation site.
+
+## Content reuse
+
+If you copy the same content multiple times across different files, create a **partial** for content reuse instead. Partials are MDX files contained in [`apps/docs/content/_partials`](https://github.com/supabase/supabase/tree/master/apps/docs/content/_partials). They contain reusable snippets that can be inserted in multiple pages. For example, you can create a partial to define a common setup step for a group of tutorials.
+
+To use a partial, import it into your MDX file. You can also set up a partial to automatically import by including it in the `components` within [`apps/docs/features/docs/MdxBase.shared.tsx`](https://github.com/supabase/supabase/blob/master/apps/docs/features/docs/MdxBase.shared.tsx).
+
+## Content listings
+
+Overview and index pages use a single `<ContentListings id="..." />` component for curated link sections. For when to use one, see [the style guide](./style-guide/02-elements.md#content-listings). Refer to [`storage.data.ts`](data/content-listings/storage.data.ts) and [`storage.mdx`](content/guides/storage.mdx) for a full example.
+
+**Prompt to add content listings:**
+
+```text
+Add a content listing block for [TOPIC] / [SECTION]. For example, use Storage / Examples.
+Follow CONTRIBUTING § Content listings in apps/docs.
+Copy structure from `storageGetStarted` in apps/docs/data/content-listings/storage.data.ts.
+Pick a globally-unique kebab-case id like `[topic]-[section]`.
+Run `pnpm test:local lib/content-listings.test.ts` from apps/docs.
+```
+
+**Manually add content listings:**
+
+1. Add or update a `ContentListingGroup` export in [`data/content-listings/[topic].data.ts`](data/content-listings/). The `id` field must be globally unique across all listing groups. For example, use `storage-get-started` rather than `get-started`. The ID is both the lookup key and the telemetry `listingId`.
+2. Place the component inline in guide MDX, for example `<ContentListings id="storage-get-started" />`. Use a partial only when the block is reused or gated with `$Show` at the partial level. For individual items that depend on a feature flag (for example `sdk:dart`), set `feature` on the item instead of wrapping the whole listing. The `feature` field removes only the listing item. The linked page stays live.
+3. Run `pnpm test:local lib/content-listings.test.ts` from `apps/docs`.
+
+Code snippets for manually adding content listings are available in [`.vscode/content-listing.code-snippets`](../../.vscode/content-listing.code-snippets). Use `cl-data` for a data export with a namespaced ID. Use `cl-inline` for an MDX component.
+
+## Feature flags and experiments
+
+Docs can hide or show content at build time with `enabled-features` flags. Use the `$Show` directive in MDX, or the `feature` field on a content listing item. To add or change a flag, see the [enabled-features README](../../packages/common/enabled-features/README.md).
+
+Docs also supports A/B tests behind PostHog feature flags. PostHog flags resolve in the browser, not at build time.
+
+Supabase staff: to run an experiment, contact the Docs PM or Docs Engineering. Read [Feature flag a docs change](https://app.notion.com/p/4105004b775f81bf810ddd5682284d23) (internal, staff only) first.
+
+Other contributors: if your change may need an A/B test, say so in your PR description or issue. The Docs team decides and sets up the flag. To preview a variant of a live experiment locally, add `?<flag>=<variant>` to the URL.
+
+## Search
+
+Search is keyword-based, backed by the `docs_search_v2` table and RPC in Postgres (see [`supabase/migrations/*_docs_search_v2*.sql`](../../supabase/migrations/)).
+
+- **UI**: [`features/SearchV2`](features/SearchV2) holds `SearchV2Trigger` (top bar, Cmd+K), `SearchV2Dialog`, and `useSearchV2Dialog`. The presentational pieces (`SearchTrigger`, `SearchPanel`, `useSearchShortcut`) live in the [`docs-search`](../../packages/docs-search) package.
+- **Hook**: `useDocsSearchV2` in [`packages/common/hooks`](../../packages/common/hooks/useDocsSearchV2.ts) calls an endpoint with `?q=` and manages the search state. It also feeds the 404 page recommendations.
+- **API**: [`app/api/search_v2/route.ts`](app/api/search_v2/route.ts) calls the RPC.
+- **Ingestion**: `pnpm ingest:search_v2` ([`scripts/search_v2`](scripts/search_v2)) chunks the generated markdown with `docs-search/ingest` and upserts it into the table. The [Ingest Docs Content for Search V2](../../.github/workflows/docs-search-v2-ingest.yml) workflow runs it on content changes to `master` and nightly.
+
+### Try search locally
+
+1. Start a local Supabase stack from the repo root. It applies the `docs_search_v2` migrations:
+
+   ```bash
+   supabase start
+   ```
+
+2. Add the following to `apps/docs/.env.local`, taking the values from `supabase status`:
+
+   ```bash
+   NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+   SUPABASE_SECRET_KEY=<secret key>
+   # Federated content is fetched from GitHub during ingestion
+   GH_TOKEN=<token>   # or run: export GH_TOKEN=$(gh auth token)
+   ```
+
+3. Ingest the content, then start the app and use the search box:
+
+   ```bash
+   pnpm ingest:search_v2
+   pnpm dev
+   ```

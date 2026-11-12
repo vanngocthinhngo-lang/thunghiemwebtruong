@@ -1,0 +1,114 @@
+'use client'
+
+import { Accordion } from 'radix-ui'
+import { PropsWithChildren } from 'react'
+import { cn } from 'ui'
+
+import { type NavMenuSection } from '../Navigation.types'
+import { MenuId } from './NavigationMenu'
+import NavigationMenuGuideListItems from './NavigationMenuGuideListItems'
+import { IA_NAV_PENDING_CLASS, useDocsPathname, useIaNavReady, useNavItems } from '@/features/IaNav'
+
+const NavigationMenuGuideList = ({
+  id,
+  additionalNavItems,
+}: {
+  id: string
+  additionalNavItems?: Record<string, Partial<NavMenuSection>[]>
+}) => {
+  const pathname = useDocsPathname()
+  const firstLevelRoute = pathname?.split('/')?.slice(0, 4)?.join('/')
+  const NavItems = useNavItems()
+  const isNavReady = useIaNavReady()
+
+  let menu = NavItems[id]
+
+  if (id === MenuId.Integrations && additionalNavItems?.integrations) {
+    const integrationsListIndex = menu.items.findIndex((item) => item.name === 'Integrations')
+    if (integrationsListIndex !== -1) {
+      menu = {
+        ...menu,
+        items: [
+          ...menu.items.slice(0, integrationsListIndex),
+          {
+            ...menu.items[integrationsListIndex],
+            items: [...menu.items[integrationsListIndex].items, ...additionalNavItems.integrations],
+          },
+          ...menu.items.slice(integrationsListIndex + 1),
+        ],
+      }
+    }
+  }
+
+  // Inject federated prompts into the 'AI Tools > Prompts' section
+  if (id === MenuId.GettingStarted && additionalNavItems?.prompts) {
+    const aiToolsSectionIndex = menu.items.findIndex((item) => item.name === 'AI Tools')
+    if (aiToolsSectionIndex !== -1) {
+      const beforeAITools = menu.items.slice(0, aiToolsSectionIndex)
+      const afterAITools = menu.items.slice(aiToolsSectionIndex + 1)
+
+      const aiToolsSection = menu.items[aiToolsSectionIndex]
+      const promptsSectionIndex = aiToolsSection.items.findIndex((item) => item.name === 'Prompts')
+
+      if (promptsSectionIndex !== -1) {
+        const beforePrompts = aiToolsSection.items.slice(0, promptsSectionIndex)
+        const afterPrompts = aiToolsSection.items.slice(promptsSectionIndex + 1)
+
+        const promptsSection = aiToolsSection.items[promptsSectionIndex]
+
+        const modifiedPromptsSection = {
+          ...promptsSection,
+          items: additionalNavItems.prompts,
+        }
+
+        const modifiedAIToolsSection = {
+          ...aiToolsSection,
+          items: [...beforePrompts, modifiedPromptsSection, ...afterPrompts],
+        }
+
+        menu = {
+          ...menu,
+          items: [...beforeAITools, modifiedAIToolsSection, ...afterAITools],
+        }
+      }
+    }
+  }
+
+  return (
+    <NavigationMenuGuideListWrapper
+      id={id}
+      firstLevelRoute={firstLevelRoute}
+      className={cn(!isNavReady && IA_NAV_PENDING_CLASS)}
+    >
+      <NavigationMenuGuideListItems menu={menu} id={id} />
+    </NavigationMenuGuideListWrapper>
+  )
+}
+
+export function NavigationMenuGuideListWrapper({
+  id,
+  firstLevelRoute,
+  className,
+  children,
+}: PropsWithChildren<{
+  id: string
+  firstLevelRoute?: string
+  className?: string
+}>) {
+  return (
+    <Accordion.Root
+      collapsible={true}
+      key={id}
+      type="single"
+      value={firstLevelRoute}
+      className={cn(
+        'transition-all duration-150 ease-out opacity-100 ml-0 delay-150 w-full',
+        className
+      )}
+    >
+      {children}
+    </Accordion.Root>
+  )
+}
+
+export default NavigationMenuGuideList
