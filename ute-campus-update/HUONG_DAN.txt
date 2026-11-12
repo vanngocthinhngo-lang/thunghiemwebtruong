@@ -1,0 +1,19 @@
+UTE CAMPUS - BẢN CẬP NHẬT: ĐÁ BÓNG + SÚNG TRÊN ĐẤT + ĐỒNG BỘ MƯỢT
+
+CÁCH CẬP NHẬT
+1. Giải nén zip này. Chép đè TẤT CẢ file vào thư mục gốc của dự án (cùng chỗ với thư mục assets/).
+   Giữ nguyên thư mục assets/ (chứa ute-satellite.jpg), file zip này không có ảnh đó.
+2. Đẩy lên Vercel như cách bạn vẫn làm (GitHub tự deploy hoặc upload lại).
+3. Không cần chạy SQL mới. Hãy vào Supabase > Project Settings > Realtime,
+   kiểm tra "Allow public access" đang BẬT (mặc định là bật).
+
+FILE MỚI: realtime.js (đồng bộ vị trí + sự kiện), game.js (bóng + súng)
+FILE ĐÃ SỬA: index.html, app.js, social.js, style.css
+
+CÁCH CHƠI
+- Vào phòng chung, bấm "Đi dạo".
+- Đi vào sân bóng -> hiện nút "Đá bóng". Chạy vào quả bóng để sút (giữ Chạy = sút mạnh).
+- Bấm "Đấu súng: Bật" (hoặc phím G). Súng nằm trên đất ở cụm sân phía Đông Nam.
+  Lại gần súng -> nút "Lượm" (phím E). Bắn: nút đỏ hoặc phím Space/F. Nạp đạn: nút ↻ hoặc phím R.
+- Khu vực quanh cổng là khu an toàn (không bắn, không trúng đạn).
+- Người tắt "Đấu súng" thì không bị bắn. Bị hạ gục sẽ hồi sinh ở cổng sau 3 giây.
